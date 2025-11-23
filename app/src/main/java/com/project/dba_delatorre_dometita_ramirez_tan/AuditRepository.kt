@@ -1,18 +1,15 @@
 package com.project.dba_delatorre_dometita_ramirez_tan
 
-import com.google.firebase.firestore.FirebaseFirestore
+import android.util.Log
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.tasks.await
 import kotlinx.coroutines.withContext
+import com.google.gson.JsonObject
 import java.text.SimpleDateFormat
 import java.util.*
 
 class AuditRepository(
     private val daoAuditLog: Dao_AuditLog
 ) {
-    private val firestore = FirebaseFirestore.getInstance()
-    private val auditCollection = firestore.collection("audit_trail")
-
     companion object {
         private const val TAG = "AuditRepository"
     }
@@ -23,16 +20,14 @@ class AuditRepository(
         action: String,
         description: String,
         status: String = "Success",
-        usernameParam: String? = null // ✅ Add this parameter
+        usernameParam: String? = null
     ) {
         withContext(Dispatchers.IO) {
             try {
                 val currentUser = UserSession.currentUser
-
                 val username = usernameParam ?: currentUser?.Entity_username ?: "Unknown"
                 val fullName = UserSession.getUserFullName()
 
-                // Determine online status based on action
                 val isOnline = when (action) {
                     AuditActions.LOGIN -> true
                     AuditActions.LOGOUT -> false
@@ -41,52 +36,58 @@ class AuditRepository(
 
                 val dateTime = SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.getDefault()).format(Date())
 
-                android.util.Log.d(TAG, "━━━━━━━━━━━━━━━━━━━━━━━━")
-                android.util.Log.d(TAG, "📝 Logging audit action...")
-                android.util.Log.d(TAG, "Username: $username")
-                android.util.Log.d(TAG, "Full Name: $fullName")
-                android.util.Log.d(TAG, "Action: $action")
-                android.util.Log.d(TAG, "Description: $description")
-                android.util.Log.d(TAG, "Online Status: $isOnline")
+                Log.d(TAG, "━━━━━━━━━━━━━━━━━━━━━━━━")
+                Log.d(TAG, "📝 Logging audit action...")
+                Log.d(TAG, "Username: $username")
+                Log.d(TAG, "Full Name: $fullName")
+                Log.d(TAG, "Action: $action")
+                Log.d(TAG, "Description: $description")
 
-                // Create audit log
+                // Create audit log entity
                 val auditLog = Entity_AuditLog(
                     username = username,
                     action = action,
                     description = description,
-//                    timestamp = System.currentTimeMillis(),
                     dateTime = dateTime,
                     status = status,
                     isOnline = isOnline
                 )
 
-                // Save to Firebase
-                val auditData = hashMapOf(
-                    "username" to auditLog.username,
-                    "action" to auditLog.action,
-                    "description" to auditLog.description,
-//                    "timestamp" to auditLog.timestamp,
-                    "dateTime" to auditLog.dateTime,
-                    "status" to auditLog.status,
-                    "isOnline" to auditLog.isOnline
-                )
-
-                val docRef = auditCollection.add(auditData).await()
-                android.util.Log.d(TAG, "✅ Audit log saved to Firebase: ${docRef.id}")
-
                 // Save to Room
                 daoAuditLog.insertAuditLog(auditLog)
-                android.util.Log.d(TAG, "✅ Audit log saved to Room")
-                android.util.Log.d(TAG, "━━━━━━━━━━━━━━━━━━━━━━━━")
+                Log.d(TAG, "✅ Audit log saved to Room")
+
+                // Save to API (fire-and-forget)
+                try {
+                    val auditData = JsonObject().apply {
+                        addProperty("username", username)
+                        addProperty("action", action)
+                        addProperty("description", description)
+                        addProperty("dateTime", dateTime)
+                        addProperty("status", status)
+                        addProperty("isOnline", isOnline)
+                    }
+
+                    BaneloApiService.safeCall {
+                        BaneloApiService.api.createAuditLog(auditData)
+                    }
+
+                    Log.d(TAG, "✅ Audit log saved to API")
+                } catch (e: Exception) {
+                    Log.w(TAG, "⚠️ API save failed, but data is in Room: ${e.message}")
+                }
+
+                Log.d(TAG, "━━━━━━━━━━━━━━━━━━━━━━━━")
 
             } catch (e: Exception) {
-                android.util.Log.e(TAG, "━━━━━━━━━━━━━━━━━━━━━━━━")
-                android.util.Log.e(TAG, "❌ Failed to log audit action!")
-                android.util.Log.e(TAG, "Error: ${e.message}", e)
-                android.util.Log.e(TAG, "━━━━━━━━━━━━━━━━━━━━━━━━")
+                Log.e(TAG, "━━━━━━━━━━━━━━━━━━━━━━━━")
+                Log.e(TAG, "❌ Failed to log audit action!")
+                Log.e(TAG, "Error: ${e.message}", e)
+                Log.e(TAG, "━━━━━━━━━━━━━━━━━━━━━━━━")
             }
         }
     }
+
     // ============ GET ALL AUDIT LOGS ============
 
     suspend fun getAllAuditLogs(): List<Entity_AuditLog> {
@@ -94,7 +95,7 @@ class AuditRepository(
             try {
                 daoAuditLog.getAllAuditLogs()
             } catch (e: Exception) {
-                android.util.Log.e(TAG, "Error getting audit logs: ${e.message}", e)
+                Log.e(TAG, "Error getting audit logs: ${e.message}", e)
                 emptyList()
             }
         }

@@ -16,12 +16,10 @@
     import androidx.navigation.compose.composable
     import androidx.navigation.compose.rememberNavController
     import androidx.lifecycle.viewmodel.compose.viewModel
-    import com.google.firebase.firestore.FirebaseFirestore
     import com.jakewharton.threetenabp.AndroidThreeTen
     import kotlinx.coroutines.CoroutineScope
     import kotlinx.coroutines.Dispatchers
     import kotlinx.coroutines.launch
-    import kotlinx.coroutines.tasks.await
 
     class MainActivity : ComponentActivity() {
         override fun onCreate(savedInstanceState: Bundle?) {
