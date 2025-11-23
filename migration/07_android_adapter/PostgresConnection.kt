@@ -21,11 +21,14 @@ object PostgresConnection {
 
     // PostgreSQL connection details
     // IMPORTANT: Store these in BuildConfig or environment variables, NOT in code!
-    private const val DB_HOST = "YOUR_SERVER_IP"  // e.g., "192.168.1.100" or "your-server.com"
+    // For testing: Use your computer's local IP (not localhost from Android)
+    // Find your IP: Run 'ipconfig' in Windows Command Prompt, look for IPv4 Address
+    private const val DB_HOST = "10.0.2.2"  // Android emulator special IP for host machine
+    // Or use your actual IP like "192.168.1.100" for physical devices
     private const val DB_PORT = "5432"
     private const val DB_NAME = "banelo_db"
-    private const val DB_USER = "banelo_user"
-    private const val DB_PASSWORD = "banelo_password_2024"
+    private const val DB_USER = "postgres"
+    private const val DB_PASSWORD = "admin123"
 
     private const val JDBC_URL = "jdbc:postgresql://$DB_HOST:$DB_PORT/$DB_NAME"
 
