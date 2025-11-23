@@ -179,8 +179,11 @@ class SalesGenerator:
         df = pd.DataFrame(self.sales)
 
         # Format timestamps
-        df['order_date'] = pd.to_datetime(df['order_date']).dt.strftime('%Y-%m-%d %H:%M:%S')
-        df['created_at'] = pd.to_datetime(df['created_at']).dt.strftime('%Y-%m-%d %H:%M:%S')
+        if len(df) > 0:
+            if 'order_date' in df.columns:
+                df['order_date'] = pd.to_datetime(df['order_date']).dt.strftime('%Y-%m-%d %H:%M:%S')
+            if 'created_at' in df.columns:
+                df['created_at'] = pd.to_datetime(df['created_at']).dt.strftime('%Y-%m-%d %H:%M:%S')
 
         df.to_csv(output_path, index=False)
         print(f"💾 Saved sales to: {output_path}")
