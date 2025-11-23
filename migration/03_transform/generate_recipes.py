@@ -252,14 +252,16 @@ class RecipeGenerator:
         """Save recipes and ingredients to CSV"""
         # Recipes
         recipes_df = pd.DataFrame(self.recipes)
-        recipes_df['created_at'] = recipes_df['created_at'].dt.strftime('%Y-%m-%d %H:%M:%S')
-        recipes_df['updated_at'] = recipes_df['updated_at'].dt.strftime('%Y-%m-%d %H:%M:%S')
+        if len(recipes_df) > 0 and 'created_at' in recipes_df.columns:
+            recipes_df['created_at'] = pd.to_datetime(recipes_df['created_at']).dt.strftime('%Y-%m-%d %H:%M:%S')
+            recipes_df['updated_at'] = pd.to_datetime(recipes_df['updated_at']).dt.strftime('%Y-%m-%d %H:%M:%S')
         recipes_df.to_csv(recipes_output, index=False)
         print(f"💾 Saved recipes to: {recipes_output}")
 
         # Recipe Ingredients
         ingredients_df = pd.DataFrame(self.recipe_ingredients)
-        ingredients_df['created_at'] = ingredients_df['created_at'].dt.strftime('%Y-%m-%d %H:%M:%S')
+        if len(ingredients_df) > 0 and 'created_at' in ingredients_df.columns:
+            ingredients_df['created_at'] = pd.to_datetime(ingredients_df['created_at']).dt.strftime('%Y-%m-%d %H:%M:%S')
         ingredients_df.to_csv(ingredients_output, index=False)
         print(f"💾 Saved ingredients to: {ingredients_output}")
 
