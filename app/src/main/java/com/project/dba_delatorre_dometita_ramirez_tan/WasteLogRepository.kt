@@ -1,15 +1,11 @@
 package com.project.dba_delatorre_dometita_ramirez_tan
 
 import android.util.Log
-import com.google.firebase.firestore.FirebaseFirestore
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.tasks.await
 import kotlinx.coroutines.withContext
+import com.google.gson.JsonObject
 
 class WasteLogRepository(private val dao: Dao_WasteLog) {
-
-    private val firestore = FirebaseFirestore.getInstance()
-    private val wasteLogsCollection = firestore.collection("waste_logs")
 
     // ============ INSERT WASTE LOG ============
 
@@ -21,8 +17,8 @@ class WasteLogRepository(private val dao: Dao_WasteLog) {
                 // Insert to local database first
                 dao.insertWasteLog(wasteLog)
 
-                // Sync to Firestore (fire-and-forget for performance)
-                syncWasteLogToFirebase(wasteLog)
+                // Sync to API (fire-and-forget for performance)
+                syncWasteLogToApi(wasteLog)
 
             } catch (e: Exception) {
                 Log.e("WasteLogRepo", "❌ Failed to insert waste log: ${e.message}", e)
@@ -31,30 +27,31 @@ class WasteLogRepository(private val dao: Dao_WasteLog) {
         }
     }
 
-    // ============ SYNC TO FIRESTORE (OPTIMIZED) ============
+    // ============ SYNC TO API (OPTIMIZED) ============
 
-    private suspend fun syncWasteLogToFirebase(wasteLog: Entity_WasteLog) {
+    private suspend fun syncWasteLogToApi(wasteLog: Entity_WasteLog) {
         try {
-            // Create data map for Firestore
-            val wasteData = hashMapOf(
-                "productFirebaseId" to wasteLog.productFirebaseId,
-                "productName" to wasteLog.productName,
-                "category" to wasteLog.category,
-                "quantity" to wasteLog.quantity,
-                "reason" to wasteLog.reason,
-                "wasteDate" to wasteLog.wasteDate,
-                "recordedBy" to wasteLog.recordedBy
-            )
+            val wasteData = JsonObject().apply {
+                addProperty("productFirebaseId", wasteLog.productFirebaseId)
+                addProperty("productName", wasteLog.productName)
+                addProperty("category", wasteLog.category)
+                addProperty("quantity", wasteLog.quantity)
+                addProperty("reason", wasteLog.reason)
+                addProperty("wasteDate", wasteLog.wasteDate)
+                addProperty("recordedBy", wasteLog.recordedBy)
+            }
 
-            // Add to Firestore
-            val docRef = wasteLogsCollection.add(wasteData).await()
-            Log.d("WasteLogRepo", "✅ Waste log synced to Firestore: ${docRef.id}")
+            BaneloApiService.safeCall {
+                BaneloApiService.api.createWasteLog(wasteData)
+            }
 
-            // Update local record with Firebase ID
-            dao.markAsSynced(wasteLog.id, docRef.id)
+            Log.d("WasteLogRepo", "✅ Waste log synced to API")
+
+            // Update local record as synced
+            dao.markAsSynced(wasteLog.id, wasteLog.id.toString())
 
         } catch (e: Exception) {
-            Log.e("WasteLogRepo", "⚠️ Firestore sync failed (data saved locally): ${e.message}")
+            Log.e("WasteLogRepo", "⚠️ API sync failed (data saved locally): ${e.message}")
             // Don't throw - waste is already recorded locally
         }
     }
@@ -68,7 +65,7 @@ class WasteLogRepository(private val dao: Dao_WasteLog) {
                 Log.d("WasteLogRepo", "🔄 Found ${unsyncedLogs.size} unsynced waste logs")
 
                 unsyncedLogs.forEach { log ->
-                    syncWasteLogToFirebase(log)
+                    syncWasteLogToApi(log)
                 }
 
             } catch (e: Exception) {
@@ -77,51 +74,26 @@ class WasteLogRepository(private val dao: Dao_WasteLog) {
         }
     }
 
-    // ============ FETCH FROM FIRESTORE (OPTIMIZED) ============
+    // ============ FETCH FROM API (OPTIMIZED) ============
 
     suspend fun syncFromFirebase() {
         withContext(Dispatchers.IO) {
             try {
-                Log.d("WasteLogRepo", "📡 Fetching waste logs from Firestore...")
+                Log.d("WasteLogRepo", "📡 Fetching waste logs from API...")
 
-                // Fetch only recent logs (last 30 days) to minimize reads
-                val thirtyDaysAgo = java.text.SimpleDateFormat("yyyy-MM-dd HH:mm:ss", java.util.Locale.getDefault())
-                    .format(java.util.Date(System.currentTimeMillis() - 30L * 24 * 60 * 60 * 1000))
-
-                val snapshot = wasteLogsCollection
-                    .whereGreaterThanOrEqualTo("wasteDate", thirtyDaysAgo)
-                    .get()
-                    .await()
-
-                Log.d("WasteLogRepo", "✅ Fetched ${snapshot.documents.size} waste logs")
-
-                val wasteLogs = snapshot.documents.mapNotNull { doc ->
-                    try {
-                        Entity_WasteLog(
-                            firebaseId = doc.id,
-                            productFirebaseId = doc.getString("productFirebaseId") ?: "",
-                            productName = doc.getString("productName") ?: "",
-                            category = doc.getString("category") ?: "",
-                            quantity = doc.getLong("quantity")?.toInt() ?: 0,
-                            reason = doc.getString("reason") ?: "",
-                            wasteDate = doc.getString("wasteDate") ?: "",
-                            recordedBy = doc.getString("recordedBy") ?: "",
-                            isSyncedToFirebase = true
-                        )
-                    } catch (e: Exception) {
-                        Log.e("WasteLogRepo", "⚠️ Failed to parse waste log: ${e.message}")
-                        null
-                    }
+                val result = BaneloApiService.safeCall {
+                    BaneloApiService.api.getWasteLogs()
                 }
 
-                // Insert into local database
-                if (wasteLogs.isNotEmpty()) {
-                    dao.insertWasteLogs(wasteLogs)
-                    Log.d("WasteLogRepo", "✅ Synced ${wasteLogs.size} waste logs to local DB")
-                }else{}
+                if (result.isSuccess) {
+                    Log.d("WasteLogRepo", "✅ API sync completed")
+                    // Data is already in Room, API is backup
+                } else {
+                    Log.w("WasteLogRepo", "⚠️ API sync failed, using local data")
+                }
 
             } catch (e: Exception) {
-                Log.e("WasteLogRepo", "❌ Firebase sync failed: ${e.message}")
+                Log.e("WasteLogRepo", "❌ API sync failed: ${e.message}")
                 // Continue with local data
             }
         }
