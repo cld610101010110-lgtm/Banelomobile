@@ -23,13 +23,13 @@ object PostgreSQLAdapter {
     private const val DB_NAME = "banelo_db"
     private const val DB_USER = "postgres"
     private const val DB_PASSWORD = "admin123"
-    private val JDBC_URL = "jdbc:postgresql://$DB_HOST:$DB_PORT/$DB_NAME"
+    private val JDBC_URL = "jdbc:pgsql://$DB_HOST:$DB_PORT/$DB_NAME"  // pgjdbc-ng uses pgsql
 
     /**
      * Get database connection
      */
     private suspend fun getConnection(): Connection = withContext(Dispatchers.IO) {
-        Class.forName("org.postgresql.Driver")
+        Class.forName("com.impossibl.postgres.jdbc.PGDriver")  // pgjdbc-ng driver
         DriverManager.getConnection(JDBC_URL, DB_USER, DB_PASSWORD)
     }
 
